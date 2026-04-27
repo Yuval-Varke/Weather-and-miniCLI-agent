@@ -32,6 +32,11 @@ def get_weather(city: str):
     return "Something went wrong"
 
 
+available_tools = {
+    "get_weather": get_weather,
+    "run_command": run_command
+}
+
 # ------------------ SYSTEM PROMPT ------------------
 SYSTEM_PROMPT = """
 You are a structured AI agent.
@@ -86,3 +91,10 @@ User: What is the weather in Ahmedabad and Indore?
 
 { "step": "OUTPUT", "content": "Ahmedabad: <weather>, Indore: <weather>" }
 """
+
+
+class MyOutputFormat(BaseModel) :
+    step: str = Field(..., description="The ID of the step. Example: PLAN, OUTPUT, TOOL, etc")
+    content: Optional[str] = Field(None, description="The optional string content for the step")
+    tool: Optional[str] = Field(None, description="The ID of the tool to call.")
+    input: Optional[str] = Field(None, description="The input params for the tool")
