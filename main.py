@@ -12,6 +12,26 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 
+# ------------------ TOOL ------------------
+
+def run_command(cmd:str):
+    result = os.system(cmd)
+    return result
+
+
+
+
+def get_weather(city: str):
+    url = f"https://wttr.in/{city.lower()}?format=%C+%t"
+    response = requests.get(url)
+    response.encoding = "utf-8"
+
+    if response.status_code == 200:
+        return f"The weather in {city} is {response.text}"
+
+    return "Something went wrong"
+
+
 # ------------------ SYSTEM PROMPT ------------------
 SYSTEM_PROMPT = """
 You are a structured AI agent.
