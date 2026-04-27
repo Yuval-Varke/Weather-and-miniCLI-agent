@@ -98,3 +98,98 @@ class MyOutputFormat(BaseModel) :
     content: Optional[str] = Field(None, description="The optional string content for the step")
     tool: Optional[str] = Field(None, description="The ID of the tool to call.")
     input: Optional[str] = Field(None, description="The input params for the tool")
+
+
+# ------------------ MAIN ------------------
+def main():
+    while True:
+        user_query = input("👉 ")
+
+        if user_query.lower() in ["exit", "quit"]:
+            print("Exiting...")
+            break
+
+        message_history = SYSTEM_PROMPT + f"\nUser: {user_query}\n"
+
+        MAX_STEPS = 15
+        steps = 0
+        called_cities = set()
+
+        while True:
+            steps += 1
+
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=message_history,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=MyOutputFormat,
+                ),
+            )
+
+            raw_result = response.text
+
+            if raw_result is None:
+                print("⚠️ Empty response.")
+                break
+
+
+            try:
+                parsed_result = response.parsed
+            except Exception:
+                print("⚠️ Invalid JSON:\n", raw_result)
+                break
+
+            if parsed_result is None:
+                print("⚠️ Could not parse structured output. Raw response:\n", raw_result)
+                break
+
+            # The SDK can return either a Pydantic model or a dict depending on version.
+            if isinstance(parsed_result, dict):
+                parsed_result = MyOutputFormat.model_validate(parsed_result)
+
+            # -------- HANDLE STEPS --------
+            if parsed_result.step == "START":
+                print("🔥", parsed_result.content)
+
+            elif parsed_result.step == "PLAN":
+                print("🧠", parsed_result.content)
+
+            elif parsed_result.step == "TOOL":
+                tool = parsed_result.tool
+                city = parsed_result.input
+
+                # prevent duplicate calls
+                if city in called_cities:
+                    print(f"⚠️ Already fetched {city}, skipping.")
+                    continue
+
+                called_cities.add(city)
+
+                print(f"🛠️ : {tool} ({city})")
+
+                result = available_tools[tool](city)
+
+                print(f"🛠️ : {tool} ({city}) = {result}")
+
+                observation = {
+                    "step": "OBSERVE",
+                    "tool": tool,
+                    "content": result
+                }
+
+                message_history += f"\n{json.dumps(observation)}\n"
+                continue
+
+            elif parsed_result.step == "OUTPUT":
+                print("🤖", parsed_result.content)
+                break
+
+            # append assistant step
+            message_history += f"\n{parsed_result.model_dump_json()}\n"
+
+        print("\n\n")
+
+
+if __name__ == "__main__":
+    main()
