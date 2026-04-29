@@ -101,11 +101,12 @@ class MyOutputFormat(BaseModel):
     input: Optional[str] = Field(None, description="The input params for the tool")
 
 
-def append_log(message: str) -> None:
+def append_log(message: str, log_placeholder: st.delta_generator.DeltaGenerator) -> None:
     st.session_state.logs.append(message)
+    log_placeholder.code("\n".join(st.session_state.logs), language="text")
 
 
-def run_agent(user_query: str) -> None:
+def run_agent(user_query: str, log_placeholder: st.delta_generator.DeltaGenerator) -> None:
     message_history = SYSTEM_PROMPT + f"\nUser: {user_query}\n"
 
     max_steps = 15
@@ -115,7 +116,7 @@ def run_agent(user_query: str) -> None:
     while True:
         steps += 1
         if steps > max_steps:
-            append_log("⚠️ Reached max steps, stopping.")
+            append_log("⚠️ Reached max steps, stopping.", log_placeholder)
             break
 
         response = client.models.generate_content(
@@ -129,17 +130,17 @@ def run_agent(user_query: str) -> None:
 
         raw_result = response.text
         if raw_result is None:
-            append_log("⚠️ Empty response.")
+            append_log("⚠️ Empty response.", log_placeholder)
             break
 
         try:
             parsed_result = response.parsed
         except Exception:
-            append_log(f"⚠️ Invalid JSON: {raw_result}")
+            append_log(f"⚠️ Invalid JSON: {raw_result}", log_placeholder)
             break
 
         if parsed_result is None:
-            append_log(f"⚠️ Could not parse structured output. Raw response: {raw_result}")
+            append_log(f"⚠️ Could not parse structured output. Raw response: {raw_result}", log_placeholder)
             break
 
         # The SDK can return either a Pydantic model or a dict depending on version.
@@ -147,10 +148,10 @@ def run_agent(user_query: str) -> None:
             parsed_result = MyOutputFormat.model_validate(parsed_result)
 
         if parsed_result.step == "START":
-            append_log(f"🔥 {parsed_result.content}")
+            append_log(f"🔥 {parsed_result.content}", log_placeholder)
 
         elif parsed_result.step == "PLAN":
-            append_log(f"🧠 {parsed_result.content}")
+            append_log(f"🧠 {parsed_result.content}", log_placeholder)
 
         elif parsed_result.step == "TOOL":
             tool = parsed_result.tool
@@ -158,14 +159,14 @@ def run_agent(user_query: str) -> None:
 
             # prevent duplicate calls
             if city in called_cities:
-                append_log(f"⚠️ Already fetched {city}, skipping.")
+                append_log(f"⚠️ Already fetched {city}, skipping.", log_placeholder)
                 continue
 
             called_cities.add(city)
 
-            append_log(f"🛠️ : {tool} ({city})")
+            append_log(f"🛠️ : {tool} ({city})", log_placeholder)
             result = available_tools[tool](city)
-            append_log(f"🛠️ : {tool} ({city}) = {result}")
+            append_log(f"🛠️ : {tool} ({city}) = {result}", log_placeholder)
 
             observation = {
                 "step": "OBSERVE",
@@ -177,7 +178,7 @@ def run_agent(user_query: str) -> None:
             continue
 
         elif parsed_result.step == "OUTPUT":
-            append_log(f"🤖 {parsed_result.content}")
+            append_log(f"🤖 {parsed_result.content}", log_placeholder)
             break
 
         # append assistant step
@@ -205,16 +206,17 @@ def main() -> None:
         st.session_state.logs = []
         st.rerun()
 
+    log_placeholder = st.empty()
+
+    if st.session_state.logs:
+        log_placeholder.code("\n".join(st.session_state.logs), language="text")
+
     if run_clicked:
         if not user_query.strip():
             st.warning("Please enter a request.")
         else:
-            append_log(f"👉 {user_query}")
-            run_agent(user_query.strip())
-
-    if st.session_state.logs:
-        st.subheader("Agent trace")
-        st.code("\n".join(st.session_state.logs), language="text")
+            append_log(f"👉 {user_query}", log_placeholder)
+            run_agent(user_query.strip(), log_placeholder)
 
 
 if __name__ == "__main__":
