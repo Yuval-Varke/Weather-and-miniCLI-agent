@@ -28,7 +28,9 @@ def get_weather(city: str) -> str:
     response.encoding = "utf-8"
 
     if response.status_code == 200:
-        return f"The weather in {city} is {response.text}"
+        # Replace degree symbol for reliable display in monospace logs.
+        safe_text = response.text.replace("°", " deg ")
+        return f"The weather in {city} is {safe_text}"
 
     return "Something went wrong"
 
